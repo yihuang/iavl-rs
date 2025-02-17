@@ -1,34 +1,59 @@
 use sha2::{Digest, Sha256};
 use std::cmp::{self, Ordering};
+use std::sync::LazyLock;
+
+static EMPTY_HASH: LazyLock<Vec<u8>> = LazyLock::new(|| Sha256::digest(b"").to_vec());
 
 #[derive(Debug, Clone)]
 struct Node {
+    height: u8,
+    size: u64,
+    version: u64,
     key: Vec<u8>,
     value: Vec<u8>,
     left: Option<Box<Node>>,
     right: Option<Box<Node>>,
-    height: u32,
     hash: Vec<u8>,
 }
 
 impl Node {
-    fn new(key: Vec<u8>, value: Vec<u8>) -> Self {
-        let mut node = Node {
-            key: key.clone(),
-            value: value.clone(),
+    // leaf create a leaf node
+    fn leaf(key: Vec<u8>, value: Vec<u8>, version: u64) -> Self {
+        Node {
+            height: 0,
+            size: 1,
+            version,
+            key,
+            value,
             left: None,
             right: None,
-            height: 1,
             hash: Vec::new(),
-        };
-        node.update_hash();
-        node
+        }
     }
 
-    fn update_height(&mut self) {
-        let left_height = self.left.as_ref().map(|n| n.height).unwrap_or(0);
-        let right_height = self.right.as_ref().map(|n| n.height).unwrap_or(0);
-        self.height = cmp::max(left_height, right_height) + 1;
+    // branch_bottom creates a height 1 node with two leafs as children
+    fn branch_bottom(left: Box<Node>, right: Box<Node>, version: u64) -> Self {
+        Node {
+            height: 1,
+            size: 2,
+            version,
+            key: right.key.clone(),
+            left: Some(left),
+            right: Some(right),
+            value: Vec::new(),
+            hash: Vec::new(),
+        }
+    }
+
+    fn update_height_size(&mut self) {
+        let left = self.left.as_ref().unwrap();
+        let right = self.right.as_ref().unwrap();
+        self.height = cmp::max(left.height, right.height) + 1;
+        self.size = left.size + right.size;
+    }
+
+    fn is_leaf(&self) -> bool {
+        self.height == 0
     }
 
     fn balance_factor(&self) -> i32 {
@@ -37,9 +62,21 @@ impl Node {
         left_height - right_height
     }
 
-    fn update_hash(&mut self) {
+    // mutate prepares in-place mutation for the node, it clears the hash and update version.
+    fn mutate(&mut self, version: u64) {
+        self.version = version;
+        self.hash.clear();
+    }
+
+    fn update_hash(&mut self) -> &[u8] {
+        if !self.hash.is_empty() {
+            return &self.hash;
+        }
+
         let mut hasher = Sha256::new();
         hasher.update(self.height.to_be_bytes());
+        hasher.update(self.size.to_be_bytes());
+        hasher.update(self.version.to_be_bytes());
         hasher.update(&self.key);
         hasher.update(&self.value);
 
@@ -51,11 +88,30 @@ impl Node {
         hasher.update(right_hash);
 
         self.hash = hasher.finalize().to_vec();
+
+        &self.hash
+    }
+
+    fn get_with_index(&self, key: &[u8]) -> (Option<&[u8]>, u64) {
+        if self.is_leaf() {
+            match self.key.as_slice().cmp(key) {
+                Ordering::Less => (None, 1),
+                Ordering::Greater => (None, 0),
+                Ordering::Equal => (Some(&self.value), 0),
+            }
+        } else if key.cmp(&self.key) == Ordering::Less {
+            self.left.as_ref().unwrap().get_with_index(key)
+        } else {
+            let right = self.right.as_ref().unwrap();
+            let (value, index) = right.get_with_index(key);
+            (value, index + self.size - right.size)
+        }
     }
 }
 
 pub struct IAVLTree {
     root: Option<Box<Node>>,
+    version: u64,
 }
 
 impl Default for IAVLTree {
@@ -66,109 +122,139 @@ impl Default for IAVLTree {
 
 impl IAVLTree {
     pub fn new() -> Self {
-        IAVLTree { root: None }
+        IAVLTree {
+            root: None,
+            version: 0,
+        }
     }
 
     pub fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        self.root = insert_recursive(self.root.take(), key, value);
+        let (root, _) = insert_recursive(self.root.take(), key, value, self.version);
+        self.root = Some(root);
     }
 
     pub fn get(&self, key: &[u8]) -> Option<&[u8]> {
-        get_recursive(&self.root, key)
+        self.root.as_ref()?.get_with_index(key).0
     }
 
-    pub fn root_hash(&self) -> Option<Vec<u8>> {
-        self.root.as_ref().map(|n| n.hash.clone())
+    pub fn root_hash(&mut self) -> &[u8] {
+        self.root.as_mut().map_or(&EMPTY_HASH, |n| n.update_hash())
+    }
+
+    pub fn save_version(&mut self) -> &[u8] {
+        self.version += 1;
+        self.root_hash()
     }
 }
 
-fn insert_recursive(node: Option<Box<Node>>, key: Vec<u8>, value: Vec<u8>) -> Option<Box<Node>> {
+// it returns if it's an update or insertion, if update, the tree height and balance is not changed.
+fn insert_recursive(
+    node: Option<Box<Node>>,
+    key: Vec<u8>,
+    value: Vec<u8>,
+    version: u64,
+) -> (Box<Node>, bool) {
     match node {
-        None => Some(Box::new(Node::new(key, value))),
+        None => (Box::new(Node::leaf(key, value, version)), true),
+        Some(mut n) if n.is_leaf() => match key.cmp(&n.key) {
+            Ordering::Less => (
+                Box::new(Node::branch_bottom(
+                    Box::new(Node::leaf(key, value, version)),
+                    n,
+                    version,
+                )),
+                false,
+            ),
+            Ordering::Greater => (
+                Box::new(Node::branch_bottom(
+                    n,
+                    Box::new(Node::leaf(key, value, version)),
+                    version,
+                )),
+                false,
+            ),
+            Ordering::Equal => {
+                n.mutate(version);
+                n.value = value;
+                (n, true)
+            }
+        },
         Some(mut n) => {
-            match key.cmp(&n.key) {
-                Ordering::Less => {
-                    n.left = insert_recursive(n.left, key, value);
-                }
-                Ordering::Greater => {
-                    n.right = insert_recursive(n.right, key, value);
-                }
-                Ordering::Equal => {
-                    n.value = value;
-                }
+            n.mutate(version);
+            let updated = if key.cmp(&n.key) == Ordering::Less {
+                let (n1, updated) = insert_recursive(n.left, key, value, version);
+                n.left = Some(n1);
+                updated
+            } else {
+                let (n1, updated) = insert_recursive(n.right, key, value, version);
+                n.right = Some(n1);
+                updated
+            };
+
+            if !updated {
+                n.update_height_size();
+                n = balance(n, version);
             }
 
-            n.update_height();
-            let balanced_node = balance(n);
-            Some(balanced_node)
+            (n, updated)
         }
     }
 }
 
-fn balance(mut node: Box<Node>) -> Box<Node> {
+fn balance(mut node: Box<Node>, version: u64) -> Box<Node> {
     let balance_factor = node.balance_factor();
 
     if balance_factor > 1 {
+        node.mutate(version);
         if node.left.as_ref().unwrap().balance_factor() >= 0 {
-            rotate_right(node)
+            rotate_right(node, version)
         } else {
-            let left = node.left.take().unwrap();
-            node.left = Some(rotate_left(left));
-            rotate_right(node)
+            node.left = node.left.map(|mut n| {
+                n.mutate(version);
+                rotate_left(n, version)
+            });
+            rotate_right(node, version)
         }
     } else if balance_factor < -1 {
+        node.mutate(version);
         if node.right.as_ref().unwrap().balance_factor() <= 0 {
-            rotate_left(node)
+            rotate_left(node, version)
         } else {
             let right = node.right.take().unwrap();
-            node.right = Some(rotate_right(right));
-            rotate_left(node)
+            node.right = Some(rotate_right(right, version));
+            rotate_left(node, version)
         }
     } else {
-        node.update_hash();
         node
     }
 }
 
-fn rotate_right(mut a: Box<Node>) -> Box<Node> {
+fn rotate_right(mut a: Box<Node>, version: u64) -> Box<Node> {
     let mut b = a.left.take().unwrap();
     let t2 = b.right.take();
 
     a.left = t2;
-    a.update_height();
-    a.update_hash();
+    a.update_height_size();
 
+    b.mutate(version);
     b.right = Some(a);
-    b.update_height();
-    b.update_hash();
+    b.update_height_size();
 
     b
 }
 
-fn rotate_left(mut a: Box<Node>) -> Box<Node> {
+fn rotate_left(mut a: Box<Node>, version: u64) -> Box<Node> {
     let mut b = a.right.take().unwrap();
     let t2 = b.left.take();
 
     a.right = t2;
-    a.update_height();
-    a.update_hash();
+    a.update_height_size();
 
+    b.mutate(version);
     b.left = Some(a);
-    b.update_height();
-    b.update_hash();
+    b.update_height_size();
 
     b
-}
-
-fn get_recursive<'a>(node: &'a Option<Box<Node>>, key: &[u8]) -> Option<&'a [u8]> {
-    match node {
-        None => None,
-        Some(n) => match key.cmp(&n.key) {
-            cmp::Ordering::Less => get_recursive(&n.left, key),
-            cmp::Ordering::Greater => get_recursive(&n.right, key),
-            cmp::Ordering::Equal => Some(&n.value),
-        },
-    }
 }
 
 #[cfg(test)]
@@ -178,15 +264,15 @@ mod tests {
     #[test]
     fn test_basic_operations() {
         let mut tree = IAVLTree::new();
-        assert_eq!(tree.root_hash(), None);
+        assert_eq!(tree.root_hash(), &*EMPTY_HASH);
 
         tree.insert(b"key1".to_vec(), b"value1".to_vec());
         assert_eq!(tree.get(b"key1"), Some(b"value1".as_ref()));
-        let root1 = tree.root_hash().unwrap();
+        let root1 = tree.save_version().to_vec();
 
         tree.insert(b"key2".to_vec(), b"value2".to_vec());
         assert_eq!(tree.get(b"key2"), Some(b"value2".as_ref()));
-        let root2 = tree.root_hash().unwrap();
+        let root2 = tree.save_version().to_vec();
 
         assert_ne!(root1, root2);
     }
@@ -195,10 +281,10 @@ mod tests {
     fn test_update_value() {
         let mut tree = IAVLTree::new();
         tree.insert(b"key".to_vec(), b"value1".to_vec());
-        let hash1 = tree.root_hash().unwrap();
+        let hash1 = tree.save_version().to_vec();
 
         tree.insert(b"key".to_vec(), b"value2".to_vec());
-        let hash2 = tree.root_hash().unwrap();
+        let hash2 = tree.save_version().to_vec();
 
         assert_ne!(hash1, hash2);
         assert_eq!(tree.get(b"key"), Some(b"value2".as_ref()));
