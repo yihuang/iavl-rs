@@ -92,6 +92,7 @@ impl Node {
         &self.hash
     }
 
+    // get_with_index returns the value and the index of the key in the tree.
     fn get_with_index(&self, key: &[u8]) -> (Option<&[u8]>, u64) {
         if self.is_leaf() {
             match self.key.as_slice().cmp(key) {
@@ -106,6 +107,23 @@ impl Node {
             let (value, index) = right.get_with_index(key);
             (value, index + self.size - right.size)
         }
+    }
+
+    // get_by_index returns the key and value at the given index.
+    fn get_by_index(&self, index: u64) -> Option<(&[u8], &[u8])> {
+        if self.is_leaf() {
+            if index == 0 {
+                return Some((&self.key, &self.value));
+            }
+            return None;
+        }
+
+        let left = self.left.as_ref().unwrap();
+        if index < left.size {
+            return left.get_by_index(index);
+        }
+
+        self.right.as_ref().unwrap().get_by_index(index - left.size)
     }
 }
 
