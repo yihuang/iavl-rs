@@ -60,6 +60,7 @@ dependencies = [
 name = "iavl"
 version = "0.1.0"
 dependencies = [
+ "crypto-common",
  "sha2",
 ]
 

@@ -1,8 +1,9 @@
+use crypto_common::Output;
 use sha2::{Digest, Sha256};
 use std::cmp::{self, Ordering};
 use std::sync::LazyLock;
 
-static EMPTY_HASH: LazyLock<Vec<u8>> = LazyLock::new(|| Sha256::digest(b"").to_vec());
+static EMPTY_HASH: LazyLock<Output<Sha256>> = LazyLock::new(|| Sha256::digest(b""));
 
 #[derive(Debug, Clone)]
 struct Node {
@@ -13,7 +14,7 @@ struct Node {
     value: Vec<u8>,
     left: Option<Box<Node>>,
     right: Option<Box<Node>>,
-    hash: Vec<u8>,
+    hash: Option<Output<Sha256>>,
 }
 
 impl Node {
@@ -27,7 +28,7 @@ impl Node {
             value,
             left: None,
             right: None,
-            hash: Vec::new(),
+            hash: None,
         }
     }
 
@@ -41,7 +42,7 @@ impl Node {
             left: Some(left),
             right: Some(right),
             value: Vec::new(),
-            hash: Vec::new(),
+            hash: None,
         }
     }
 
@@ -65,31 +66,32 @@ impl Node {
     // mutate prepares in-place mutation for the node, it clears the hash and update version.
     fn mutate(&mut self, version: u64) {
         self.version = version;
-        self.hash.clear();
+        self.hash = None;
     }
 
-    fn update_hash(&mut self) -> &[u8] {
-        if !self.hash.is_empty() {
-            return &self.hash;
-        }
+    fn update_hash(&mut self) -> &Output<Sha256> {
+        if self.hash.is_none() {
+            let mut hasher = Sha256::new();
+            hasher.update(self.height.to_be_bytes());
+            hasher.update(self.size.to_be_bytes());
+            hasher.update(self.version.to_be_bytes());
+            hasher.update(&self.key);
+            hasher.update(&self.value);
 
-        let mut hasher = Sha256::new();
-        hasher.update(self.height.to_be_bytes());
-        hasher.update(self.size.to_be_bytes());
-        hasher.update(self.version.to_be_bytes());
-        hasher.update(&self.key);
-        hasher.update(&self.value);
+            if !self.is_leaf() {
+                let left_hash = self.left.as_mut().unwrap().update_hash();
+                hasher.update(left_hash);
 
-        let empty = Vec::new();
-        let left_hash = self.left.as_ref().map_or(&empty, |n| &n.hash);
-        hasher.update(left_hash);
+                let right_hash = self.right.as_mut().unwrap().update_hash();
+                hasher.update(right_hash);
+            }
 
-        let right_hash = self.right.as_ref().map_or(&empty, |n| &n.hash);
-        hasher.update(right_hash);
+            self.hash = Some(hasher.finalize());
+        };
 
-        self.hash = hasher.finalize().to_vec();
-
-        &self.hash
+        // SAFETY: a `None` variant for `self` would have been replaced by a `Some`
+        // variant in the code above.
+        unsafe { self.hash.as_ref().unwrap_unchecked() }
     }
 
     // get_with_index returns the value and the index of the key in the tree.
@@ -155,11 +157,11 @@ impl IAVLTree {
         self.root.as_ref()?.get_with_index(key).0
     }
 
-    pub fn root_hash(&mut self) -> &[u8] {
+    pub fn root_hash(&mut self) -> &Output<Sha256> {
         self.root.as_mut().map_or(&EMPTY_HASH, |n| n.update_hash())
     }
 
-    pub fn save_version(&mut self) -> &[u8] {
+    pub fn save_version(&mut self) -> &Output<Sha256> {
         self.version += 1;
         self.root_hash()
     }
@@ -306,5 +308,24 @@ mod tests {
 
         assert_ne!(hash1, hash2);
         assert_eq!(tree.get(b"key"), Some(b"value2".as_ref()));
+    }
+
+    #[test]
+    fn test_key_index() {
+        let mut tree = IAVLTree::new();
+        for i in 0u32..10 {
+            tree.insert(i.to_be_bytes().to_vec(), i.to_be_bytes().to_vec());
+        }
+        tree.save_version();
+
+        let root = tree.root.expect("root non empty");
+        for i in 0u32..10 {
+            let (key, value) = root.get_by_index(i.into()).expect("value exists");
+            assert_eq!(key, &i.to_be_bytes());
+            assert_eq!(value, &i.to_be_bytes());
+            let (value, index) = root.get_with_index(&i.to_be_bytes());
+            assert_eq!(value.expect("value exists"), &i.to_be_bytes());
+            assert_eq!(index, i.into());
+        }
     }
 }
