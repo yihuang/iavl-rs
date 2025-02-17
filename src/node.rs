@@ -1,4 +1,5 @@
 use crypto_common::Output;
+use integer_encoding::VarInt;
 use sha2::{Digest, Sha256};
 use std::cmp::{self, Ordering};
 
@@ -68,22 +69,7 @@ impl Node {
 
     pub fn update_hash(&mut self) -> &Output<Sha256> {
         if self.hash.is_none() {
-            let mut hasher = Sha256::new();
-            hasher.update(self.height.to_be_bytes());
-            hasher.update(self.size.to_be_bytes());
-            hasher.update(self.version.to_be_bytes());
-            hasher.update(&self.key);
-            hasher.update(&self.value);
-
-            if !self.is_leaf() {
-                let left_hash = self.left.as_mut().unwrap().update_hash();
-                hasher.update(left_hash);
-
-                let right_hash = self.right.as_mut().unwrap().update_hash();
-                hasher.update(right_hash);
-            }
-
-            self.hash = Some(hasher.finalize());
+            self.hash = Some(hash_node(self));
         };
 
         // SAFETY: a `None` variant for `self` would have been replaced by a `Some`
@@ -123,5 +109,72 @@ impl Node {
         }
 
         self.right.as_ref().unwrap().get_by_index(index - left.size)
+    }
+}
+
+fn hash_node(node: &mut Node) -> Output<Sha256> {
+    let mut buf = [0u8; 8];
+    let mut hasher = Sha256::new();
+
+    {
+        let n = (node.height as i64).encode_var(&mut buf);
+        hasher.update(&buf[..n]);
+    }
+
+    {
+        let n = (node.size as i64).encode_var(&mut buf);
+        hasher.update(&buf[..n]);
+    }
+
+    {
+        let n = (node.version as i64).encode_var(&mut buf);
+        hasher.update(&buf[..n]);
+    }
+
+    if node.is_leaf() {
+        hash_bytes(&mut hasher, &node.key);
+        hash_bytes(&mut hasher, &Sha256::digest(&node.value));
+    } else {
+        let left_hash = node.left.as_mut().unwrap().update_hash();
+        hash_bytes(&mut hasher, left_hash);
+
+        let right_hash = node.right.as_mut().unwrap().update_hash();
+        hash_bytes(&mut hasher, right_hash);
+    }
+
+    hasher.finalize()
+}
+
+fn hash_bytes(hasher: &mut Sha256, bytes: &[u8]) {
+    let mut buf = [0u8; 8];
+    let n = bytes.len().encode_var(&mut buf);
+    hasher.update(&buf[..n]);
+    hasher.update(bytes);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hexhex::hex_literal;
+
+    #[test]
+    fn test_hash() {
+        let node1 = Box::new(Node::leaf(b"key1".to_vec(), b"value1".to_vec(), 0));
+        let node2 = Box::new(Node::leaf(b"key2".to_vec(), b"value2".to_vec(), 0));
+        let mut node3 = Node::branch_bottom(node1.clone(), node2.clone(), 1);
+        node3.update_hash();
+
+        assert_eq!(
+            node3.left.unwrap().hash.as_deref().expect(""),
+            hex_literal!("bffb733c4d36d48583fca5d1d088fcdf2682d2eea77c864d2da00cda56a832ec")
+        );
+        assert_eq!(
+            node3.right.unwrap().hash.as_deref().expect(""),
+            hex_literal!("915cdad41f11fc68bc8a9ff3c47c3050c06be086a382d7487cb4a4981dad5ef9")
+        );
+        assert_eq!(
+            node3.hash.as_deref().expect(""),
+            hex_literal!("d315e38c4e0093b72123fe70733a733a3fc185dfbce72357595738672ba984f2")
+        );
     }
 }

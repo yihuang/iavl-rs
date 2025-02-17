@@ -47,6 +47,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -57,12 +63,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexhex"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c56592988a798d4df9155ea41f1d83d1e9a3eefd50fb0c31eb861b6c273ed2fc"
+dependencies = [
+ "hexhex_impl",
+ "hexhex_macros",
+]
+
+[[package]]
+name = "hexhex_impl"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f530c66081961311028f67d22da8e3f739dab6979fc200f199c3ef0fb2e194a"
+dependencies = [
+ "fallible-iterator",
+]
+
+[[package]]
+name = "hexhex_macros"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd0ae2c93351a14664ef0fa185c434a56783fb83a71b158a3389d594dd391e1f"
+dependencies = [
+ "hexhex_impl",
+]
+
+[[package]]
 name = "iavl"
 version = "0.1.0"
 dependencies = [
  "crypto-common",
+ "hexhex",
+ "integer-encoding",
  "sha2",
 ]
+
+[[package]]
+name = "integer-encoding"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d762194228a2f1c11063e46e32e5acb96e66e906382b9eb5441f2e0504bbd5a"
 
 [[package]]
 name = "libc"
