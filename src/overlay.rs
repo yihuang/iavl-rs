@@ -2,15 +2,15 @@ use std::collections::BTreeMap;
 
 use super::KVStore;
 
-pub struct Overlay {
-    pub parent: Box<dyn KVStore>,
+pub struct Overlay<S> {
+    pub parent: Box<S>,
 
     // use `Option` as value to represent deletion(tomestone).
     pub tree: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
-impl Overlay {
-    pub fn new(parent: Box<dyn KVStore>) -> Self {
+impl<S: KVStore> Overlay<S> {
+    pub fn new(parent: Box<S>) -> Self {
         Self {
             parent,
             tree: BTreeMap::new(),
@@ -28,7 +28,7 @@ impl Overlay {
     }
 }
 
-impl KVStore for Overlay {
+impl<S: KVStore> KVStore for Overlay<S> {
     fn get(&self, key: &[u8]) -> Option<&[u8]> {
         match self.tree.get(key) {
             Some(value) => value.as_deref(),
