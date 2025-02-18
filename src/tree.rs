@@ -27,8 +27,12 @@ impl IAVLTree {
     }
 
     pub fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        let (root, _) = insert_recursive(self.root.take(), key, value, self.version);
-        self.root = Some(root);
+        if let Some(root) = self.root.take() {
+            let (node, _) = insert_recursive(root, key, value, self.version);
+            self.root = Some(node);
+        } else {
+            self.root = Some(Box::new(Node::leaf(key, value, self.version)));
+        }
     }
 
     pub fn get(&self, key: &[u8]) -> Option<&[u8]> {
@@ -47,55 +51,53 @@ impl IAVLTree {
 
 // it returns if it's an update or insertion, if update, the tree height and balance is not changed.
 fn insert_recursive(
-    node: Option<Box<Node>>,
+    mut node: Box<Node>,
     key: Vec<u8>,
     value: Vec<u8>,
     version: u64,
 ) -> (Box<Node>, bool) {
-    match node {
-        None => (Box::new(Node::leaf(key, value, version)), true),
-        Some(mut n) if n.is_leaf() => match key.cmp(&n.key) {
+    if node.is_leaf() {
+        match key.cmp(&node.key) {
             Ordering::Less => (
                 Box::new(Node::branch_bottom(
                     Box::new(Node::leaf(key, value, version)),
-                    n,
+                    node,
                     version,
                 )),
                 false,
             ),
             Ordering::Greater => (
                 Box::new(Node::branch_bottom(
-                    n,
+                    node,
                     Box::new(Node::leaf(key, value, version)),
                     version,
                 )),
                 false,
             ),
             Ordering::Equal => {
-                n.mutate(version);
-                n.value = value;
-                (n, true)
+                node.mutate(version);
+                node.value = value;
+                (node, true)
             }
-        },
-        Some(mut n) => {
-            n.mutate(version);
-            let updated = if key.cmp(&n.key) == Ordering::Less {
-                let (n1, updated) = insert_recursive(n.left, key, value, version);
-                n.left = Some(n1);
-                updated
-            } else {
-                let (n1, updated) = insert_recursive(n.right, key, value, version);
-                n.right = Some(n1);
-                updated
-            };
-
-            if !updated {
-                n.update_height_size();
-                n = balance(n, version);
-            }
-
-            (n, updated)
         }
+    } else {
+        node.mutate(version);
+        let updated = if key.cmp(&node.key) == Ordering::Less {
+            let (n1, updated) = insert_recursive(node.left.unwrap(), key, value, version);
+            node.left = Some(n1);
+            updated
+        } else {
+            let (n1, updated) = insert_recursive(node.right.unwrap(), key, value, version);
+            node.right = Some(n1);
+            updated
+        };
+
+        if !updated {
+            node.update_height_size();
+            node = balance(node, version);
+        }
+
+        (node, updated)
     }
 }
 
