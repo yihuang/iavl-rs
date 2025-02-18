@@ -28,16 +28,16 @@ impl IAVLTree {
 
     pub fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
         if let Some(root) = self.root.take() {
-            let (node, _) = insert_recursive(root, key, value, self.version);
+            let (node, _) = insert_recursive(root, key, value, self.version + 1);
             self.root = Some(node);
         } else {
-            self.root = Some(Box::new(Node::leaf(key, value, self.version)));
+            self.root = Some(Box::new(Node::leaf(key, value, self.version + 1)));
         }
     }
 
     pub fn remove(&mut self, key: &[u8]) {
         if let Some(root) = self.root.take() {
-            let (_, root, _) = remove_recursive(root, key, self.version);
+            let (_, root, _) = remove_recursive(root, key, self.version + 1);
             self.root = root;
         }
     }
@@ -226,6 +226,7 @@ fn rotate_left(mut a: Box<Node>, version: u64) -> Box<Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hexhex::hex_literal;
 
     #[test]
     fn test_basic_operations() {
@@ -278,6 +279,99 @@ mod tests {
             let (value, index) = root.get_with_index(&i.to_be_bytes());
             assert_eq!(value.expect("value exists"), &i.to_be_bytes());
             assert_eq!(index, i.into());
+        }
+    }
+
+    struct KVPair {
+        delete: bool,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    }
+
+    fn delete(key: &[u8]) -> KVPair {
+        KVPair {
+            delete: true,
+            key: key.to_vec(),
+            value: Vec::new(),
+        }
+    }
+
+    fn insert(key: &[u8], value: &[u8]) -> KVPair {
+        KVPair {
+            delete: false,
+            key: key.to_vec(),
+            value: value.to_vec(),
+        }
+    }
+
+    #[test]
+    fn test_hash_vector() {
+        let ref_hashes = [
+            hex_literal!("6032661ab0d201132db7a8fa1da6a0afe427e6278bd122c301197680ab79ca02"),
+            hex_literal!("457d81f933f53e5cfb90d813b84981aa2604d69939e10c94304d18287ded31f7"),
+            hex_literal!("c7ab142752add0374992261536e502851ce555d243270d3c3c6b77cf31b7945d"),
+            hex_literal!("e54da9407cbca3570d04ad5c3296056a0726467cb06272ffd8ef1b4ae87fb99d"),
+            hex_literal!("8b04490800d6b54fa569715a754b5fafe24fd720f677cab819394cf7ccf8cdec"),
+            hex_literal!("38abd5268374923e6727b14ac5a9bb6611e591d7e316d0a612904062f244e72f"),
+            hex_literal!("d91cf6388eeff3204474bb07b853ab0d7d39163912ac1e610e92f9b178c76922"),
+        ];
+        let ref_hashes_initial_version = [
+            hex_literal!("053bb7cf59993f3c4f3c95f76037bb597cfe2fe662a7c5a49ecb06acb3eaf672"),
+            hex_literal!("ac4d11d9d685c38401059dcc097b3780df1d34280a6d291d729d7e98f41f07c6"),
+            hex_literal!("49d572c2cf09b4de3167c3d61a38137b3b2f0caf2dfc431ef79ea7ca8e0d701e"),
+            hex_literal!("e13b7fdbf9ddc7537c70f00f2f8477e422a1a6e12768cf03edd2b329a310e875"),
+            hex_literal!("30f964138a9c8e4b8ee933c57982a58c99ec31948f2dbb3b0eafbfac2d578c13"),
+            hex_literal!("c379fbf3f3e83d0a92cfb7c6fc43566a8d1aad25a00de8cae61e7685176cb8bf"),
+            hex_literal!("5712608bf5ccb32dd3231bc6e2fc2df427083eca892c7e1766312190fc3ef715"),
+        ];
+
+        let mut changesets = vec![
+            vec![insert(b"hello", b"world")],
+            vec![insert(b"hello", b"world1"), insert(b"hello1", b"world1")],
+            vec![insert(b"hello2", b"world1"), insert(b"hello3", b"world1")],
+        ];
+
+        let mut changes = vec![];
+        for i in 0..1 {
+            changes.push(insert(format!("hello{:02}", i).as_bytes(), b"world1"))
+        }
+        changesets.push(changes);
+
+        changesets.push(vec![delete(b"hello"), delete(b"hello19")]);
+
+        let mut changes = vec![];
+        for i in 0..21 {
+            changes.push(insert(format!("aello{:02}", i).as_bytes(), b"world1"));
+        }
+        changesets.push(changes);
+
+        let mut changes = vec![];
+        for i in 0..21 {
+            changes.push(delete(format!("aello{:02}", i).as_bytes()));
+        }
+        for i in 0..19 {
+            changes.push(delete(format!("hello{:02}", i).as_bytes()));
+        }
+        changesets.push(changes);
+
+        let mut tree = IAVLTree::new();
+        let mut tree_initial_version = IAVLTree::new();
+        tree_initial_version.version = 100 - 1;
+        for (i, changes) in changesets.iter().enumerate() {
+            for change in changes {
+                if change.delete {
+                    tree.remove(&change.key);
+                    tree_initial_version.remove(&change.key);
+                } else {
+                    tree.insert(change.key.clone(), change.value.clone());
+                    tree_initial_version.insert(change.key.clone(), change.value.clone());
+                }
+            }
+            assert_eq!(tree.save_version().to_vec(), ref_hashes[i]);
+            assert_eq!(
+                tree_initial_version.save_version().to_vec(),
+                ref_hashes_initial_version[i]
+            );
         }
     }
 }
