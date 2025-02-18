@@ -35,6 +35,13 @@ impl IAVLTree {
         }
     }
 
+    pub fn remove(&mut self, key: &[u8]) {
+        if let Some(root) = self.root.take() {
+            let (_, root, _) = remove_recursive(root, key, self.version);
+            self.root = root;
+        }
+    }
+
     pub fn get(&self, key: &[u8]) -> Option<&[u8]> {
         self.root.as_ref()?.get_with_index(key).0
     }
@@ -98,6 +105,65 @@ fn insert_recursive(
         }
 
         (node, updated)
+    }
+}
+
+// remove_recursive returns:
+// - (false, Some(origNode), None)
+//   key not found, nothing changed in subtree
+// - (true,  None,           None)
+//   leaf is removed, to replace parent with the other leaf or none
+// - (true,  Some(new node), None))
+//   subtree changed, don't update branch key
+// - (true,  Some(new node), Some(newKey))
+//   subtree changed, update branch key
+fn remove_recursive(
+    mut node: Box<Node>,
+    key: &[u8],
+    version: u64,
+) -> (bool, Option<Box<Node>>, Option<Vec<u8>>) {
+    if node.is_leaf() {
+        if key == node.key {
+            (true, None, None)
+        } else {
+            (false, Some(node), None)
+        }
+    } else if key < &node.key {
+        let (found, new_left, new_key) = remove_recursive(node.left.take().unwrap(), key, version);
+        if !found {
+            node.left = new_left;
+            return (false, Some(node), None);
+        }
+
+        if let Some(new_left) = new_left {
+            node.mutate(version);
+            node.left = Some(new_left);
+            node.update_height_size();
+            node = balance(node, version);
+            (true, Some(node), new_key)
+        } else {
+            (true, node.right, Some(node.key))
+        }
+    } else {
+        let (found, new_right, new_key) =
+            remove_recursive(node.right.take().unwrap(), key, version);
+        if !found {
+            node.right = new_right;
+            return (false, Some(node), None);
+        }
+
+        if let Some(new_right) = new_right {
+            node.mutate(version);
+            node.right = Some(new_right);
+            if let Some(new_key) = new_key {
+                node.key = new_key;
+            }
+            node.update_height_size();
+            node = balance(node, version);
+            (true, Some(node), None)
+        } else {
+            (true, node.left, None)
+        }
     }
 }
 
@@ -172,9 +238,15 @@ mod tests {
 
         tree.insert(b"key2".to_vec(), b"value2".to_vec());
         assert_eq!(tree.get(b"key2"), Some(b"value2".as_ref()));
-        let root2 = tree.save_version().to_vec();
 
+        let root2 = tree.save_version().to_vec();
         assert_ne!(root1, root2);
+
+        tree.remove(b"key2");
+        assert_eq!(tree.get(b"key2"), None);
+
+        let root3 = tree.save_version().to_vec();
+        assert_eq!(root1, root3);
     }
 
     #[test]
