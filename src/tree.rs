@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::sync::LazyLock;
 
 use super::node::Node;
+use super::types::KVStore;
 
 static EMPTY_HASH: LazyLock<Output<Sha256>> = LazyLock::new(|| Sha256::digest(b""));
 
@@ -26,7 +27,33 @@ impl IAVLTree {
         }
     }
 
-    pub fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
+    pub fn root_hash(&mut self) -> &Output<Sha256> {
+        self.root.as_mut().map_or(&EMPTY_HASH, |n| n.update_hash())
+    }
+
+    pub fn save_version(&mut self) -> &Output<Sha256> {
+        self.version += 1;
+        self.root_hash()
+    }
+
+    pub fn get_by_index(&self, index: u64) -> Option<(&[u8], &[u8])> {
+        self.root.as_ref()?.get_by_index(index)
+    }
+
+    pub fn get_with_index(&self, key: &[u8]) -> (Option<&[u8]>, u64) {
+        match self.root.as_ref() {
+            Some(root) => root.get_with_index(key),
+            None => (None, 0),
+        }
+    }
+}
+
+impl KVStore for IAVLTree {
+    fn get(&self, key: &[u8]) -> Option<&[u8]> {
+        self.root.as_ref()?.get_with_index(key).0
+    }
+
+    fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
         if let Some(root) = self.root.take() {
             let (node, _) = insert_recursive(root, key, value, self.version + 1);
             self.root = Some(node);
@@ -35,24 +62,11 @@ impl IAVLTree {
         }
     }
 
-    pub fn remove(&mut self, key: &[u8]) {
+    fn remove(&mut self, key: &[u8]) {
         if let Some(root) = self.root.take() {
             let (_, root, _) = remove_recursive(root, key, self.version + 1);
             self.root = root;
         }
-    }
-
-    pub fn get(&self, key: &[u8]) -> Option<&[u8]> {
-        self.root.as_ref()?.get_with_index(key).0
-    }
-
-    pub fn root_hash(&mut self) -> &Output<Sha256> {
-        self.root.as_mut().map_or(&EMPTY_HASH, |n| n.update_hash())
-    }
-
-    pub fn save_version(&mut self) -> &Output<Sha256> {
-        self.version += 1;
-        self.root_hash()
     }
 }
 
@@ -233,11 +247,11 @@ mod tests {
         let mut tree = IAVLTree::new();
         assert_eq!(tree.root_hash(), &*EMPTY_HASH);
 
-        tree.insert(b"key1".to_vec(), b"value1".to_vec());
+        tree.set(b"key1".to_vec(), b"value1".to_vec());
         assert_eq!(tree.get(b"key1"), Some(b"value1".as_ref()));
         let root1 = tree.save_version().to_vec();
 
-        tree.insert(b"key2".to_vec(), b"value2".to_vec());
+        tree.set(b"key2".to_vec(), b"value2".to_vec());
         assert_eq!(tree.get(b"key2"), Some(b"value2".as_ref()));
 
         let root2 = tree.save_version().to_vec();
@@ -253,10 +267,10 @@ mod tests {
     #[test]
     fn test_update_value() {
         let mut tree = IAVLTree::new();
-        tree.insert(b"key".to_vec(), b"value1".to_vec());
+        tree.set(b"key".to_vec(), b"value1".to_vec());
         let hash1 = tree.save_version().to_vec();
 
-        tree.insert(b"key".to_vec(), b"value2".to_vec());
+        tree.set(b"key".to_vec(), b"value2".to_vec());
         let hash2 = tree.save_version().to_vec();
 
         assert_ne!(hash1, hash2);
@@ -267,16 +281,15 @@ mod tests {
     fn test_key_index() {
         let mut tree = IAVLTree::new();
         for i in 0u32..10 {
-            tree.insert(i.to_be_bytes().to_vec(), i.to_be_bytes().to_vec());
+            tree.set(i.to_be_bytes().to_vec(), i.to_be_bytes().to_vec());
         }
         tree.save_version();
 
-        let root = tree.root.expect("root non empty");
         for i in 0u32..10 {
-            let (key, value) = root.get_by_index(i.into()).expect("value exists");
+            let (key, value) = tree.get_by_index(i.into()).expect("value exists");
             assert_eq!(key, &i.to_be_bytes());
             assert_eq!(value, &i.to_be_bytes());
-            let (value, index) = root.get_with_index(&i.to_be_bytes());
+            let (value, index) = tree.get_with_index(&i.to_be_bytes());
             assert_eq!(value.expect("value exists"), &i.to_be_bytes());
             assert_eq!(index, i.into());
         }
@@ -363,8 +376,8 @@ mod tests {
                     tree.remove(&change.key);
                     tree_initial_version.remove(&change.key);
                 } else {
-                    tree.insert(change.key.clone(), change.value.clone());
-                    tree_initial_version.insert(change.key.clone(), change.value.clone());
+                    tree.set(change.key.clone(), change.value.clone());
+                    tree_initial_version.set(change.key.clone(), change.value.clone());
                 }
             }
             assert_eq!(tree.save_version().to_vec(), ref_hashes[i]);
