@@ -68,6 +68,24 @@ impl KVStore for IAVLTree {
             self.root = root;
         }
     }
+
+    fn iter(&self) -> impl Iterator<Item = (&[u8], &[u8])> {
+        TreeIterator {
+            _inner: self.root.as_ref().unwrap(),
+        }
+    }
+}
+
+pub struct TreeIterator<'a> {
+    _inner: &'a Node,
+}
+
+impl<'a> Iterator for TreeIterator<'a> {
+    type Item = (&'a [u8], &'a [u8]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unimplemented!()
+    }
 }
 
 // it returns if it's an update or insertion, if update, the tree height and balance is not changed.

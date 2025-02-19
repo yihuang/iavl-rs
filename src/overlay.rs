@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::KVStore;
+use super::{KVStore, MergeIter};
 
 pub struct Overlay<S> {
     pub parent: Box<S>,
@@ -43,6 +43,13 @@ impl<S: KVStore> KVStore for Overlay<S> {
     fn remove(&mut self, key: &[u8]) {
         self.tree.insert(key.to_vec(), None);
     }
+
+    fn iter(&self) -> impl Iterator<Item = (&[u8], &[u8])> {
+        MergeIter::new(
+            self.tree.iter().map(|(k, v)| (k.as_slice(), v.as_deref())),
+            self.parent.iter(),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -67,5 +74,25 @@ mod tests {
         overlay.flush();
         assert_eq!(overlay.parent.get(b"key1"), Some(b"value1" as &[u8]));
         assert_eq!(overlay.parent.get(b"removed"), None);
+    }
+
+    #[test]
+    fn test_overlay_iter() {
+        let mut parent = Box::new(MemTree::new());
+        parent.set(b"key1".to_vec(), b"value1".to_vec());
+        parent.set(b"key2".to_vec(), b"value2".to_vec());
+        parent.set(b"key3".to_vec(), b"value3".to_vec());
+
+        let mut overlay = Overlay::new(parent);
+        overlay.set(b"key2".to_vec(), b"new_value2".to_vec());
+        overlay.remove(b"key3");
+
+        let mut iter = overlay.iter();
+        assert_eq!(iter.next(), Some((b"key1" as &[u8], b"value1" as &[u8])));
+        assert_eq!(
+            iter.next(),
+            Some((b"key2" as &[u8], b"new_value2" as &[u8]))
+        );
+        assert_eq!(iter.next(), None);
     }
 }

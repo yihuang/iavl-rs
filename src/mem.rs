@@ -17,12 +17,6 @@ impl MemTree {
             tree: BTreeMap::new(),
         }
     }
-
-    pub fn iter(&self) -> MemTreeIterator {
-        MemTreeIterator {
-            inner: self.tree.iter(),
-        }
-    }
 }
 
 impl KVStore for MemTree {
@@ -36,6 +30,12 @@ impl KVStore for MemTree {
 
     fn remove(&mut self, key: &[u8]) {
         self.tree.remove(key);
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&[u8], &[u8])> {
+        MemTreeIterator {
+            inner: self.tree.iter(),
+        }
     }
 }
 
