@@ -1,4 +1,5 @@
 mod mem;
+pub mod mergeiter;
 mod node;
 mod overlay;
 mod tree;
