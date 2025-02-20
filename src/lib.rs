@@ -1,3 +1,4 @@
+mod iterator;
 mod mem;
 mod mergeiter;
 mod node;

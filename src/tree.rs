@@ -3,6 +3,7 @@ use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::sync::LazyLock;
 
+use super::iterator::TreeIterator;
 use super::node::Node;
 use super::types::KVStore;
 
@@ -69,32 +70,11 @@ impl KVStore for IAVLTree {
         }
     }
 
-    fn range<R>(&self, _bounds: R) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])>
+    fn range<R>(&self, bounds: R) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])>
     where
         R: std::ops::RangeBounds<Vec<u8>>,
     {
-        // TODO
-        TreeIterator {
-            _inner: self.root.as_ref().unwrap(),
-        }
-    }
-}
-
-pub struct TreeIterator<'a> {
-    _inner: &'a Node,
-}
-
-impl<'a> Iterator for TreeIterator<'a> {
-    type Item = (&'a [u8], &'a [u8]);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        unimplemented!()
-    }
-}
-
-impl<'a> DoubleEndedIterator for TreeIterator<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        unimplemented!()
+        TreeIterator::new(self.root.as_deref(), bounds)
     }
 }
 
@@ -321,6 +301,55 @@ mod tests {
             assert_eq!(value.expect("value exists"), &i.to_be_bytes());
             assert_eq!(index, i.into());
         }
+    }
+
+    #[test]
+    fn test_tree_range() {
+        let mut tree = IAVLTree::new();
+        tree.set(b"key1".to_vec(), b"value1".to_vec());
+        tree.set(b"key3".to_vec(), b"value3".to_vec());
+        tree.set(b"key2".to_vec(), b"value2".to_vec());
+        tree.set(b"key4".to_vec(), b"value4".to_vec());
+        tree.save_version();
+
+        assert_eq!(
+            tree.range(..).collect::<Vec<_>>(),
+            vec![
+                (b"key1".as_ref(), b"value1".as_ref()),
+                (b"key2".as_ref(), b"value2".as_ref()),
+                (b"key3".as_ref(), b"value3".as_ref()),
+                (b"key4".as_ref(), b"value4".as_ref()),
+            ]
+        );
+
+        assert_eq!(
+            tree.range(..).rev().collect::<Vec<_>>(),
+            vec![
+                (b"key4".as_ref(), b"value4".as_ref()),
+                (b"key3".as_ref(), b"value3".as_ref()),
+                (b"key2".as_ref(), b"value2".as_ref()),
+                (b"key1".as_ref(), b"value1".as_ref()),
+            ]
+        );
+
+        assert_eq!(
+            tree.range(b"key2".to_vec()..b"key4".to_vec())
+                .collect::<Vec<_>>(),
+            vec![
+                (b"key2".as_ref(), b"value2".as_ref()),
+                (b"key3".as_ref(), b"value3".as_ref()),
+            ]
+        );
+
+        assert_eq!(
+            tree.range(b"key2".to_vec()..b"key4".to_vec())
+                .rev()
+                .collect::<Vec<_>>(),
+            vec![
+                (b"key3".as_ref(), b"value3".as_ref()),
+                (b"key2".as_ref(), b"value2".as_ref()),
+            ]
+        );
     }
 
     struct KVPair {
