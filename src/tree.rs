@@ -69,17 +69,7 @@ impl KVStore for IAVLTree {
         }
     }
 
-    fn range<R>(&self, _bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
-    where
-        R: std::ops::RangeBounds<Vec<u8>>,
-    {
-        // TODO
-        TreeIterator {
-            _inner: self.root.as_ref().unwrap(),
-        }
-    }
-
-    fn range_back<R>(&self, _bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    fn range<R>(&self, _bounds: R) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])>
     where
         R: std::ops::RangeBounds<Vec<u8>>,
     {
@@ -98,6 +88,12 @@ impl<'a> Iterator for TreeIterator<'a> {
     type Item = (&'a [u8], &'a [u8]);
 
     fn next(&mut self) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+
+impl<'a> DoubleEndedIterator for TreeIterator<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
         unimplemented!()
     }
 }

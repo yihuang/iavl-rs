@@ -34,22 +34,12 @@ impl KVStore for MemTree {
         self.tree.remove(key);
     }
 
-    fn range<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    fn range<R>(&self, bounds: R) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])>
     where
         R: RangeBounds<Vec<u8>>,
     {
         self.tree
             .range(bounds)
-            .map(|(k, v)| (k.as_slice(), v.as_slice()))
-    }
-
-    fn range_back<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
-    where
-        R: RangeBounds<Vec<u8>>,
-    {
-        self.tree
-            .range(bounds)
-            .rev()
             .map(|(k, v)| (k.as_slice(), v.as_slice()))
     }
 }
@@ -104,7 +94,7 @@ mod tests {
             ]
         );
 
-        let result = tree.range_back(b"key2".to_vec()..).collect::<Vec<_>>();
+        let result = tree.range(b"key2".to_vec()..).rev().collect::<Vec<_>>();
         assert_eq!(
             result,
             vec![

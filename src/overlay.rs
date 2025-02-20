@@ -45,7 +45,7 @@ impl<S: KVStore> KVStore for Overlay<S> {
         self.tree.insert(key.to_vec(), None);
     }
 
-    fn range<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    fn range<R>(&self, bounds: R) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])>
     where
         R: RangeBounds<Vec<u8>> + Clone,
     {
@@ -54,21 +54,6 @@ impl<S: KVStore> KVStore for Overlay<S> {
                 .range(bounds.clone())
                 .map(|(k, v)| (k.as_slice(), v.as_deref())),
             self.parent.range(bounds),
-            false,
-        )
-    }
-
-    fn range_back<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
-    where
-        R: RangeBounds<Vec<u8>> + Clone,
-    {
-        MergeIter::new(
-            self.tree
-                .range(bounds.clone())
-                .rev()
-                .map(|(k, v)| (k.as_slice(), v.as_deref())),
-            self.parent.range_back(bounds),
-            true,
         )
     }
 }
@@ -127,7 +112,7 @@ mod tests {
         );
 
         assert_eq!(
-            overlay.range_back(b"key2".to_vec()..).collect::<Vec<_>>(),
+            overlay.range(b"key2".to_vec()..).rev().collect::<Vec<_>>(),
             vec![
                 (b"key4" as &[u8], b"value4" as &[u8]),
                 (b"key2" as &[u8], b"new_value2" as &[u8]),
