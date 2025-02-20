@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::RangeBounds;
 
 use super::{KVStore, MergeIter};
 
@@ -44,10 +45,15 @@ impl<S: KVStore> KVStore for Overlay<S> {
         self.tree.insert(key.to_vec(), None);
     }
 
-    fn iter(&self) -> impl Iterator<Item = (&[u8], &[u8])> {
+    fn range<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    where
+        R: RangeBounds<Vec<u8>> + Clone,
+    {
         MergeIter::new(
-            self.tree.iter().map(|(k, v)| (k.as_slice(), v.as_deref())),
-            self.parent.iter(),
+            self.tree
+                .range(bounds.clone())
+                .map(|(k, v)| (k.as_slice(), v.as_deref())),
+            self.parent.range(bounds),
         )
     }
 }
@@ -87,12 +93,16 @@ mod tests {
         overlay.set(b"key2".to_vec(), b"new_value2".to_vec());
         overlay.remove(b"key3");
 
-        let mut iter = overlay.iter();
-        assert_eq!(iter.next(), Some((b"key1" as &[u8], b"value1" as &[u8])));
         assert_eq!(
-            iter.next(),
-            Some((b"key2" as &[u8], b"new_value2" as &[u8]))
+            overlay.range(..).collect::<Vec<_>>(),
+            vec![
+                (b"key1" as &[u8], b"value1" as &[u8]),
+                (b"key2" as &[u8], b"new_value2" as &[u8]),
+            ]
         );
-        assert_eq!(iter.next(), None);
+        assert_eq!(
+            overlay.range(b"key2".to_vec()..).collect::<Vec<_>>(),
+            vec![(b"key2" as &[u8], b"new_value2" as &[u8]),]
+        );
     }
 }

@@ -1,5 +1,7 @@
+use std::collections::{btree_map::Range, BTreeMap};
+use std::ops::RangeBounds;
+
 use super::types::KVStore;
-use std::collections::{btree_map::Iter, BTreeMap};
 
 pub struct MemTree {
     pub tree: BTreeMap<Vec<u8>, Vec<u8>>,
@@ -32,16 +34,19 @@ impl KVStore for MemTree {
         self.tree.remove(key);
     }
 
-    fn iter(&self) -> impl Iterator<Item = (&[u8], &[u8])> {
+    fn range<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    where
+        R: RangeBounds<Vec<u8>>,
+    {
         MemTreeIterator {
-            inner: self.tree.iter(),
+            inner: self.tree.range(bounds),
         }
     }
 }
 
 // 新增：MemTree 的迭代器实现
 pub struct MemTreeIterator<'a> {
-    inner: Iter<'a, Vec<u8>, Vec<u8>>,
+    inner: Range<'a, Vec<u8>, Vec<u8>>,
 }
 
 impl<'a> Iterator for MemTreeIterator<'a> {
@@ -83,10 +88,23 @@ mod tests {
         tree.set(b"key2".to_vec(), b"value2".to_vec());
         tree.set(b"key3".to_vec(), b"value3".to_vec());
 
-        let mut iter = tree.iter();
-        assert_eq!(iter.next(), Some((b"key1".as_ref(), b"value1".as_ref())));
-        assert_eq!(iter.next(), Some((b"key2".as_ref(), b"value2".as_ref())));
-        assert_eq!(iter.next(), Some((b"key3".as_ref(), b"value3".as_ref())));
-        assert_eq!(iter.next(), None);
+        let result = tree.range(..).collect::<Vec<_>>();
+        assert_eq!(
+            result,
+            vec![
+                (b"key1".as_ref(), b"value1".as_ref()),
+                (b"key2".as_ref(), b"value2".as_ref()),
+                (b"key3".as_ref(), b"value3".as_ref())
+            ]
+        );
+
+        let result = tree.range(b"key2".to_vec()..).collect::<Vec<_>>();
+        assert_eq!(
+            result,
+            vec![
+                (b"key2".as_ref(), b"value2".as_ref()),
+                (b"key3".as_ref(), b"value3".as_ref())
+            ]
+        );
     }
 }
