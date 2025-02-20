@@ -73,6 +73,17 @@ impl KVStore for IAVLTree {
     where
         R: std::ops::RangeBounds<Vec<u8>>,
     {
+        // TODO
+        TreeIterator {
+            _inner: self.root.as_ref().unwrap(),
+        }
+    }
+
+    fn range_back<R>(&self, _bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    where
+        R: std::ops::RangeBounds<Vec<u8>>,
+    {
+        // TODO
         TreeIterator {
             _inner: self.root.as_ref().unwrap(),
         }

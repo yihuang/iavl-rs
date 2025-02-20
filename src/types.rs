@@ -7,4 +7,7 @@ pub trait KVStore {
     fn range<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
     where
         R: RangeBounds<Vec<u8>> + Clone;
+    fn range_back<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    where
+        R: RangeBounds<Vec<u8>> + Clone;
 }

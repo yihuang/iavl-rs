@@ -54,6 +54,21 @@ impl<S: KVStore> KVStore for Overlay<S> {
                 .range(bounds.clone())
                 .map(|(k, v)| (k.as_slice(), v.as_deref())),
             self.parent.range(bounds),
+            false,
+        )
+    }
+
+    fn range_back<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    where
+        R: RangeBounds<Vec<u8>> + Clone,
+    {
+        MergeIter::new(
+            self.tree
+                .range(bounds.clone())
+                .rev()
+                .map(|(k, v)| (k.as_slice(), v.as_deref())),
+            self.parent.range_back(bounds),
+            true,
         )
     }
 }
@@ -83,11 +98,12 @@ mod tests {
     }
 
     #[test]
-    fn test_overlay_iter() {
+    fn test_overlay_range() {
         let mut parent = Box::new(MemTree::new());
         parent.set(b"key1".to_vec(), b"value1".to_vec());
         parent.set(b"key2".to_vec(), b"value2".to_vec());
         parent.set(b"key3".to_vec(), b"value3".to_vec());
+        parent.set(b"key4".to_vec(), b"value4".to_vec());
 
         let mut overlay = Overlay::new(parent);
         overlay.set(b"key2".to_vec(), b"new_value2".to_vec());
@@ -98,11 +114,24 @@ mod tests {
             vec![
                 (b"key1" as &[u8], b"value1" as &[u8]),
                 (b"key2" as &[u8], b"new_value2" as &[u8]),
+                (b"key4" as &[u8], b"value4" as &[u8]),
             ]
         );
+
         assert_eq!(
             overlay.range(b"key2".to_vec()..).collect::<Vec<_>>(),
-            vec![(b"key2" as &[u8], b"new_value2" as &[u8]),]
+            vec![
+                (b"key2" as &[u8], b"new_value2" as &[u8]),
+                (b"key4" as &[u8], b"value4" as &[u8]),
+            ]
+        );
+
+        assert_eq!(
+            overlay.range_back(b"key2".to_vec()..).collect::<Vec<_>>(),
+            vec![
+                (b"key4" as &[u8], b"value4" as &[u8]),
+                (b"key2" as &[u8], b"new_value2" as &[u8]),
+            ]
         );
     }
 }

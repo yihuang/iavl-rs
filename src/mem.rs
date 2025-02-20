@@ -1,4 +1,4 @@
-use std::collections::{btree_map::Range, BTreeMap};
+use std::collections::BTreeMap;
 use std::ops::RangeBounds;
 
 use super::types::KVStore;
@@ -38,22 +38,19 @@ impl KVStore for MemTree {
     where
         R: RangeBounds<Vec<u8>>,
     {
-        MemTreeIterator {
-            inner: self.tree.range(bounds),
-        }
+        self.tree
+            .range(bounds)
+            .map(|(k, v)| (k.as_slice(), v.as_slice()))
     }
-}
 
-// 新增：MemTree 的迭代器实现
-pub struct MemTreeIterator<'a> {
-    inner: Range<'a, Vec<u8>, Vec<u8>>,
-}
-
-impl<'a> Iterator for MemTreeIterator<'a> {
-    type Item = (&'a [u8], &'a [u8]);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|(k, v)| (k.as_slice(), v.as_slice()))
+    fn range_back<R>(&self, bounds: R) -> impl Iterator<Item = (&[u8], &[u8])>
+    where
+        R: RangeBounds<Vec<u8>>,
+    {
+        self.tree
+            .range(bounds)
+            .rev()
+            .map(|(k, v)| (k.as_slice(), v.as_slice()))
     }
 }
 
@@ -104,6 +101,15 @@ mod tests {
             vec![
                 (b"key2".as_ref(), b"value2".as_ref()),
                 (b"key3".as_ref(), b"value3".as_ref())
+            ]
+        );
+
+        let result = tree.range_back(b"key2".to_vec()..).collect::<Vec<_>>();
+        assert_eq!(
+            result,
+            vec![
+                (b"key3".as_ref(), b"value3".as_ref()),
+                (b"key2".as_ref(), b"value2".as_ref()),
             ]
         );
     }
