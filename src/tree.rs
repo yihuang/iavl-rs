@@ -17,10 +17,7 @@ pub struct IAVLTree {
 
 impl IAVLTree {
     pub fn new() -> Self {
-        IAVLTree {
-            root: None,
-            version: 0,
-        }
+        Self::default()
     }
 
     pub fn root_hash(&mut self) -> &Output<Sha256> {

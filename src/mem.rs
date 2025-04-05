@@ -10,9 +10,7 @@ pub struct MemTree {
 
 impl MemTree {
     pub fn new() -> Self {
-        Self {
-            tree: BTreeMap::new(),
-        }
+        Self::default()
     }
 }
 
