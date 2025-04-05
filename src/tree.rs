@@ -9,23 +9,15 @@ use super::types::KVStore;
 
 static EMPTY_HASH: LazyLock<Output<Sha256>> = LazyLock::new(|| Sha256::digest(b""));
 
+#[derive(Default)]
 pub struct IAVLTree {
     root: Option<Box<Node>>,
     version: u64,
 }
 
-impl Default for IAVLTree {
-    fn default() -> Self {
-        IAVLTree::new()
-    }
-}
-
 impl IAVLTree {
     pub fn new() -> Self {
-        IAVLTree {
-            root: None,
-            version: 0,
-        }
+        Self::default()
     }
 
     pub fn root_hash(&mut self) -> &Output<Sha256> {

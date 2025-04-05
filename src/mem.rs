@@ -3,21 +3,14 @@ use std::ops::RangeBounds;
 
 use super::types::KVStore;
 
+#[derive(Default)]
 pub struct MemTree {
     pub tree: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
-impl Default for MemTree {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl MemTree {
     pub fn new() -> Self {
-        Self {
-            tree: BTreeMap::new(),
-        }
+        Self::default()
     }
 }
 
