@@ -45,10 +45,19 @@ impl Node {
     }
 
     pub fn update_height_size(&mut self) {
-        let left = self.left.as_ref().unwrap();
-        let right = self.right.as_ref().unwrap();
-        self.height = cmp::max(left.height, right.height) + 1;
-        self.size = left.size + right.size;
+        // We add 1 to the child node's height because empty subtrees are assigned a height of -1,
+        // which cannot be represented in u8 type
+        let (lh, l_size) = self
+            .left
+            .as_ref()
+            .map_or_else(|| (0, 0), |n| (n.height + 1, n.size));
+        let (rh, r_size) = self
+            .right
+            .as_ref()
+            .map_or_else(|| (0, 0), |n| (n.height + 1, n.size));
+
+        self.height = cmp::max(lh, rh);
+        self.size = l_size + r_size;
     }
 
     pub fn is_leaf(&self) -> bool {
@@ -56,8 +65,8 @@ impl Node {
     }
 
     pub fn balance_factor(&self) -> i32 {
-        let left_height = self.left.as_ref().map(|n| n.height).unwrap_or(0) as i32;
-        let right_height = self.right.as_ref().map(|n| n.height).unwrap_or(0) as i32;
+        let left_height = self.left.as_ref().map(|n| n.height as i32).unwrap_or(-1) as i32;
+        let right_height = self.right.as_ref().map(|n| n.height as i32).unwrap_or(-1) as i32;
         left_height - right_height
     }
 
@@ -156,6 +165,26 @@ fn hash_bytes(hasher: &mut Sha256, bytes: &[u8]) {
 mod tests {
     use super::*;
     use hexhex::hex_literal;
+
+    #[test]
+    fn test_leaf_update_height_size() {
+        let mut leaf = Node::leaf(b"key".to_vec(), b"value".to_vec(), 0);
+        leaf.update_height_size();
+        assert_eq!(leaf.height, 0);
+        assert_eq!(leaf.size, 0);
+        assert!(leaf.left.is_none());
+        assert!(leaf.right.is_none());
+    }
+
+    #[test]
+    fn test_branch_update_height_size() {
+        let leaf1 = Box::new(Node::leaf(b"key1".to_vec(), b"val1".to_vec(), 0));
+        let leaf2 = Box::new(Node::leaf(b"key2".to_vec(), b"val2".to_vec(), 0));
+        let mut branch = Node::branch_bottom(leaf1, leaf2, 1);
+        branch.update_height_size();
+        assert_eq!(branch.height, 1);
+        assert_eq!(branch.size, 2);
+    }
 
     #[test]
     fn test_hash() {
