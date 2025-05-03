@@ -1,0 +1,17 @@
+[package]
+name = "iavl"
+version = "0.1.0"
+edition = "2021"
+description = "Implementation of IAVL+ Tree"
+authors = ["Your Name <your.email@example.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/your/repo"
+
+[dependencies]
+crypto-common = "0.1.6"
+double-ended-peekable = "0.1.0"
+integer-encoding = "4.0.2"
+sha2 = "0.10.8"
+
+[dev-dependencies]
+hexhex = "1.1.1"
