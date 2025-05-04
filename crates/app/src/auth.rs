@@ -51,11 +51,11 @@ pub fn load(kv: &impl KVStore, address: Address) -> Account {
 mod test {
     use super::*;
     use alloy_primitives::U160;
-    use iavl::MemTree;
+    use iavl::IAVLTree;
 
     #[test]
     fn test_auth() {
-        let mut kv = MemTree::default();
+        let mut kv = IAVLTree::default();
         let address = Address::from(U160::from(0x1234));
         let mut account = Account::with_address(address);
 

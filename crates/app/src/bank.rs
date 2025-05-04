@@ -32,11 +32,11 @@ mod test {
     use super::*;
     use alloy_primitives::Address;
     use alloy_primitives::U160;
-    use iavl::MemTree;
+    use iavl::IAVLTree;
 
     #[test]
     fn test_bank() {
-        let mut kv = MemTree::default();
+        let mut kv = IAVLTree::default();
         let address = Address::from(U160::from(0x1234));
         let denom = "atom";
         let amount = U256::from(100);
