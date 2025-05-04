@@ -3,15 +3,15 @@ use std::ops::RangeBounds;
 
 use super::{KVStore, MergeIter};
 
-pub struct Overlay<S> {
-    pub parent: Box<S>,
+pub struct Overlay<'a, S> {
+    pub parent: &'a mut S,
 
     // use `Option` as value to represent deletion(tomestone).
     pub tree: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
-impl<S: KVStore> Overlay<S> {
-    pub fn new(parent: Box<S>) -> Self {
+impl<'a, S: KVStore> Overlay<'a, S> {
+    pub fn new(parent: &'a mut S) -> Self {
         Self {
             parent,
             tree: BTreeMap::new(),
@@ -29,7 +29,7 @@ impl<S: KVStore> Overlay<S> {
     }
 }
 
-impl<S: KVStore> KVStore for Overlay<S> {
+impl<S: KVStore> KVStore for Overlay<'_, S> {
     fn get(&self, key: &[u8]) -> Option<&[u8]> {
         match self.tree.get(key) {
             Some(value) => value.as_deref(),
@@ -65,10 +65,10 @@ mod tests {
 
     #[test]
     fn test_overlay() {
-        let mut parent = Box::new(MemTree::new());
+        let mut parent = MemTree::new();
         parent.set(b"removed".to_vec(), b"removed".to_vec());
 
-        let mut overlay = Overlay::new(parent);
+        let mut overlay = Overlay::new(&mut parent);
         assert_eq!(overlay.get(b"removed"), Some(b"removed" as &[u8]));
 
         overlay.set(b"key1".to_vec(), b"value1".to_vec());
@@ -78,19 +78,19 @@ mod tests {
         assert_eq!(overlay.get(b"removed"), None);
 
         overlay.flush();
-        assert_eq!(overlay.parent.get(b"key1"), Some(b"value1" as &[u8]));
-        assert_eq!(overlay.parent.get(b"removed"), None);
+        assert_eq!(parent.get(b"key1"), Some(b"value1" as &[u8]));
+        assert_eq!(parent.get(b"removed"), None);
     }
 
     #[test]
     fn test_overlay_range() {
-        let mut parent = Box::new(MemTree::new());
+        let mut parent = MemTree::new();
         parent.set(b"key1".to_vec(), b"value1".to_vec());
         parent.set(b"key2".to_vec(), b"value2".to_vec());
         parent.set(b"key3".to_vec(), b"value3".to_vec());
         parent.set(b"key4".to_vec(), b"value4".to_vec());
 
-        let mut overlay = Overlay::new(parent);
+        let mut overlay = Overlay::new(&mut parent);
         overlay.set(b"key2".to_vec(), b"new_value2".to_vec());
         overlay.remove(b"key3");
 
