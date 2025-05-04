@@ -47,6 +47,34 @@ pub fn load(kv: &impl KVStore, address: Address) -> Account {
     }
 }
 
+pub fn incr_nonce(kv: &mut impl KVStore, address: Address) -> u64 {
+    let mut account = load(kv, address);
+    account.nonce += 1;
+    save(kv, &account);
+    account.nonce
+}
+
+pub fn transfer_native_token(
+    kv: &mut impl KVStore,
+    from: Address,
+    to: Address,
+    amount: U256,
+) -> Option<()> {
+    let mut from_account = load(kv, from);
+    let mut to_account = load(kv, to);
+
+    if from_account.balance < amount {
+        return None;
+    }
+
+    from_account.balance -= amount;
+    to_account.balance += amount;
+
+    save(kv, &from_account);
+    save(kv, &to_account);
+    Some(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

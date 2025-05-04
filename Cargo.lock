@@ -52,16 +52,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "alloy-rlp",
- "bincode 2.0.1",
- "iavl",
-]
-
-[[package]]
 name = "ark-ff"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -708,6 +698,16 @@ dependencies = [
  "sha2",
  "tempfile",
  "walcraft",
+]
+
+[[package]]
+name = "iavl-app"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "bincode 2.0.1",
+ "iavl",
 ]
 
 [[package]]
