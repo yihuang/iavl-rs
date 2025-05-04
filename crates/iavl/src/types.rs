@@ -1,5 +1,7 @@
 use std::ops::RangeBounds;
 
+pub type ChangeItem = (Vec<u8>, Option<Vec<u8>>);
+
 pub trait KVStore {
     fn get(&self, key: &[u8]) -> Option<&[u8]>;
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>);
@@ -10,7 +12,7 @@ pub trait KVStore {
 
     /// Write a batch of operations to the store.
     /// The default implementation just applies each operation individually.
-    fn write_batch(&mut self, batch: impl IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>) {
+    fn write_batch(&mut self, batch: impl IntoIterator<Item = ChangeItem>) {
         for (key, value) in batch {
             match value {
                 Some(value) => self.set(key, value),

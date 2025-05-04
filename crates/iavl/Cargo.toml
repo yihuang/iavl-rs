@@ -12,6 +12,10 @@ crypto-common = "0.1.6"
 double-ended-peekable = "0.1.0"
 integer-encoding = "4.0.2"
 sha2 = "0.10.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+walcraft = "0.2.0"
 
 [dev-dependencies]
 hexhex = "1.1.1"
+tempfile = "3.3"

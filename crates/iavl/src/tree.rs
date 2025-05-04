@@ -29,6 +29,10 @@ impl IAVLTree {
         self.root_hash()
     }
 
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
     pub fn get_by_index(&self, index: u64) -> Option<(&[u8], &[u8])> {
         self.root.as_ref()?.get_by_index(index)
     }

@@ -1,3 +1,4 @@
+mod db;
 mod iterator;
 mod mem;
 mod mergeiter;
@@ -6,6 +7,7 @@ mod overlay;
 mod tree;
 mod types;
 
+pub use db::IAVLDB;
 pub use mem::MemTree;
 pub use mergeiter::MergeIter;
 pub use overlay::Overlay;
