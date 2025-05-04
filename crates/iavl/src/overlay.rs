@@ -18,14 +18,9 @@ impl<S: KVStore> Overlay<S> {
         }
     }
 
-    // flush flushes all the changes to the parent store.
+    // flush flushes all the changes to the parent store in a batch.
     pub fn flush(&mut self) {
-        for (key, value) in std::mem::take(&mut self.tree).into_iter() {
-            match value {
-                Some(value) => self.parent.set(key, value),
-                None => self.parent.remove(&key),
-            }
-        }
+        self.parent.write_batch(std::mem::take(&mut self.tree));
     }
 }
 

@@ -7,4 +7,15 @@ pub trait KVStore {
     fn range<R>(&self, bounds: R) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])>
     where
         R: RangeBounds<Vec<u8>> + Clone;
+
+    /// Write a batch of operations to the store.
+    /// The default implementation just applies each operation individually.
+    fn write_batch(&mut self, batch: impl IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>) {
+        for (key, value) in batch {
+            match value {
+                Some(value) => self.set(key, value),
+                None => self.remove(&key),
+            }
+        }
+    }
 }
