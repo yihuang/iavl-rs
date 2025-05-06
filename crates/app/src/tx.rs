@@ -46,10 +46,10 @@ pub fn execute_block(kv: &mut impl KVStore, miner: &Address, txs: &[TxEnvelope])
     let mut reward = U256::ZERO;
 
     for tx in txs {
-        let mut snapshot = Overlay::new(kv);
-        if let Some(fee) = execute_tx(&mut snapshot, tx) {
+        let mut buffer = Overlay::new(kv);
+        if let Some(fee) = execute_tx(&mut buffer, tx) {
             reward = reward.checked_add(fee)?;
-            snapshot.flush();
+            buffer.flush();
         }
     }
 
