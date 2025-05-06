@@ -67,13 +67,15 @@ mod tests {
     use alloy_primitives::{TxKind, U160};
     use alloy_signer_local::PrivateKeySigner;
 
+    const GAS_PRICE: u128 = 20e9 as u128;
+
     fn legacy_tx(gas: u64, nonce: u64) -> TxLegacy {
         TxLegacy {
             nonce,
             value: U256::from(100),
             to: TxKind::Call(Address::random()),
             gas_limit: gas,
-            gas_price: 20e9 as u128,
+            gas_price: GAS_PRICE,
             chain_id: Some(CHAIN_ID),
             ..Default::default()
         }
@@ -96,7 +98,7 @@ mod tests {
         ];
 
         let exp_total_value = U256::from(100 * txs.len());
-        let exp_total_fee = U256::from(txs.len() as u128 * 21000 * 20e9 as u128);
+        let exp_total_fee = U256::from(txs.len() as u128 * 21000 * GAS_PRICE);
 
         // fund sender account in pre-state
         auth::modify_native_balance(&mut kv, &signer.address(), |balance| {
