@@ -27,6 +27,18 @@ pub fn set_balance(kv: &mut impl KVStore, address: &Address, denom: &str, amount
     kv.set(key, buf)
 }
 
+pub fn mod_balance(
+    kv: &mut impl KVStore,
+    address: &Address,
+    denom: &str,
+    mod_fn: impl FnOnce(U256) -> Option<U256>,
+) -> Option<()> {
+    let balance = get_balance(kv, address, denom);
+    let balance = mod_fn(balance)?;
+    set_balance(kv, address, denom, balance);
+    Some(())
+}
+
 pub fn transfer(
     kv: &mut impl KVStore,
     from: &Address,
